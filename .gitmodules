@@ -1,0 +1,3 @@
+[submodule "example/bzip2"]
+	path = example/bzip2
+	url = git@github.com:LuaDist/bzip2.git
