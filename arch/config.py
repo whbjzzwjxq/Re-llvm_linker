@@ -1,6 +1,19 @@
 import os
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Callable, List
+
+
+@dataclass
+class ASMInst:
+    addr: str
+    hex_code: str
+    opcode: str
+    operands: str
+    appends: str
+
+    @property
+    def addr_as_int(self):
+        return int(self.addr, 16)
 
 
 @dataclass
@@ -10,97 +23,135 @@ class ArchConfig:
     asm: str
     objdump: str
     include: str
+    asm_line_resolver: Callable[[str], ASMInst]
+    objdump_para: str = ''
+    as_para: str = ''
 
     @property
-    def bc_file(self):
+    def bc_prefix(self):
         return self.name + '_bc'
 
     @property
-    def ir_file(self):
-        return self.name + '_ir'
+    def ir_filename(self):
+        return self.name + '.ll'
 
     @property
-    def asm_file(self):
-        return self.bc_file + '.s'
+    def ir_info_filename(self):
+        return self.name + '-info.ll'
 
     @property
-    def asm_dump_file(self):
-        return self.bc_file + '_dump.s'
+    def asm_filename(self):
+        return self.bc_prefix + '.s'
 
     @property
-    def obj_file(self):
-        return self.bc_file + '.o'
+    def asm_dump_filename(self):
+        return self.bc_prefix + '_dump.s'
 
     @property
-    def stdout_file(self):
+    def obj_filename(self):
+        return self.bc_prefix + '.o'
+
+    @property
+    def tmp_filename(self):
         return self.name + '.tmp'
 
     @property
-    def files(self):
+    def filenames(self):
         return [
-            self.bc_file,
-            self.ir_file,
-            self.asm_file,
-            self.asm_dump_file,
-            self.obj_file,
+            self.ir_filename,
+            self.ir_info_filename,
+            self.asm_filename,
+            self.asm_dump_filename,
+            self.obj_filename,
         ]
 
-    def gen_file_rela_paths(self, temp_dir: str) -> Tuple[str, ...]:
-        bc_file = os.path.join(temp_dir, self.bc_file)
-        ir_file = os.path.join(temp_dir, self.ir_file)
-        asm_file = os.path.join(temp_dir, self.asm_file)
-        asm_dump_file = os.path.join(temp_dir, self.asm_dump_file)
-        obj_file = os.path.join(temp_dir, self.obj_file)
-        stdout_file = os.path.join(temp_dir, self.stdout_file)
-        return bc_file, ir_file, asm_file, asm_dump_file, obj_file, stdout_file
+    def gen_file_rela_paths(self, temp_dir: str):
+        ir_path = os.path.join(temp_dir, self.ir_filename)
+        ir_info_path = os.path.join(temp_dir, self.ir_info_filename)
+        asm_path = os.path.join(temp_dir, self.asm_filename)
+        asm_dump_path = os.path.join(temp_dir, self.asm_dump_filename)
+        obj_path = os.path.join(temp_dir, self.obj_filename)
+        tmp_path = os.path.join(temp_dir, self.tmp_filename)
+        return ir_path, ir_info_path, asm_path, asm_dump_path, obj_path, tmp_path
+
+
+def resolve_arm_asm_inst(line: str):
+    components: List[str] = line.split('\t')
+    if len(components) == 4:
+        components.append('')
+    addr, hex_code, opcode, operands, appends = components
+    addr = addr[:-1]
+    hex_code = hex_code.rstrip(' ')
+    appends = appends[2:]
+    return ASMInst(addr, hex_code, opcode, operands, appends)
+
+
+def resolve_x86_asm_inst(line: str):
+    components: List[str] = line.split('\t')
+    addr, hex_code, asm_code = components
+    addr = addr[:-1]
+    hex_code = hex_code.rstrip(' ')
+    opcode, operands = asm_code.split(' ', maxsplit=1)
+    operands.lstrip(' ')
+    return ASMInst(addr, hex_code, opcode, operands, '')
 
 
 arm_arch = ArchConfig(
     name='arm',
-    target='armv6a-unknown-linux-gnueabi',
+    target='armv7-unknown-linux-gnueabi',
     asm='/usr/bin/arm-linux-gnueabi-as',
     objdump='/usr/bin/arm-linux-gnueabi-objdump',
     include='/usr/arm-linux-gnueabi/include',
-)
-
-arm64_arch = ArchConfig(
-    name='aarch64',
-    target='aarch64-unknown-linux-gnu',
-    asm='/usr/bin/aarch64-linux-gnu-as',
-    objdump='/usr/bin/aarch64-linux-gnu-objdump',
-    include='aarch64-linux-gnu',
+    asm_line_resolver=resolve_arm_asm_inst,
+    objdump_para='-M reg-names-raw',
+    as_para='-march=armv7a',
 )
 
 x86_arch = ArchConfig(
     name='x86',
     target='i686-unknown-linux-gnu',
     asm='/usr/bin/i686-linux-gnu-as',
-    objdump='/usr/bin/i686-linux-gnu-objdump',
+    objdump='/usr/bin/objdump',
     include='/usr/i686-linux-gnu/include',
+    asm_line_resolver=resolve_x86_asm_inst,
+    objdump_para='-M suffix',
+    as_para='',
 )
 
-x86_64_arch = ArchConfig(
-    name='x86_64',
-    target='x86_64-unknown-linux-gnu',
-    asm='/usr/bin/x86_64-linux-gnu-as',
-    objdump='/usr/bin/x86_64-linux-gnu-objdump',
-    include='/usr/x86_64-linux-gnu32/include',
-)
+# arm64_arch = ArchConfig(
+#     name='aarch64',
+#     target='aarch64-unknown-linux-gnu',
+#     asm='/usr/bin/aarch64-linux-gnu-as',
+#     objdump='/usr/bin/aarch64-linux-gnu-objdump',
+#     include='aarch64-linux-gnu',
+# )
+#
+#
+# x86_64_arch = ArchConfig(
+#     name='x86_64',
+#     target='x86_64-unknown-linux-gnu',
+#     asm='/usr/bin/x86_64-linux-gnu-as',
+#     objdump='/usr/bin/x86_64-linux-gnu-objdump',
+#     include='/usr/x86_64-linux-gnu32/include',
+# )
+#
+# riscv64_arch = ArchConfig(
+#     name='riscv64',
+#     target='riscv64-unknown-linux-gnu',
+#     asm='/usr/bin/riscv64-linux-gnu-as',
+#     objdump='/usr/bin/riscv64-linux-gnu-objdump',
+#     include='/usr/riscv64-linux-gnu/include',
+# )
 
-riscv64_arch = ArchConfig(
-    name='riscv64',
-    target='riscv64-unknown-linux-gnu',
-    asm='/usr/bin/riscv64-linux-gnu-as',
-    objdump='/usr/bin/riscv64-linux-gnu-objdump',
-    include='/usr/riscv64-linux-gnu/include',
-)
-
-archs = [arm_arch, arm64_arch, x86_arch, x86_64_arch]
+archs = [arm_arch, x86_arch]
 
 CLANG_PATH = os.environ.get('CLANG_PATH', None)
 LLC_PATH = os.environ.get('LLC_PATH', None)
+OPT_PATH = os.environ.get('OPT_PATH', None)
 
 if CLANG_PATH is None:
     raise FileNotFoundError('Could not find clang')
 if LLC_PATH is None:
     raise FileNotFoundError('Could not find llc')
+if OPT_PATH is None:
+    raise FileNotFoundError('Could not find opt')

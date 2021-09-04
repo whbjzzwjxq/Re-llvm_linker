@@ -1,3 +1,9 @@
 [submodule "example/bzip2"]
 	path = example/bzip2
 	url = git@github.com:LuaDist/bzip2.git
+[submodule "Re-llvm_pass_for_ml"]
+	path = Re-llvm_pass_for_ml
+	url = git@github.com:whbjzzwjxq/Re-llvm_pass_for_ml.git
+[submodule "IR2JSON"]
+	path = IR2JSON
+	url = git@github.com:whbjzzwjxq/Re-llvm_pass_for_ml.git
